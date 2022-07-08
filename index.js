@@ -1,8 +1,31 @@
 const config = require('./config.json');
 const Twitter = require('twitter-v2');
 const axios = require('axios');
+const urlExpander = require('expand-url');
 require('dotenv').config()
 
+function expand(url) {
+    return new Promise((resolve, reject) => {
+        urlExpander.expand(url, (err, expandedUrl) => {
+            if(expandedUrl){
+                resolve(expandedUrl)
+            } else{
+                resolve(url)
+            }
+        })
+    })
+}
+
+async function replaceAsync(str, regex, asyncFn) {
+    const promises = [];
+    str.replace(regex, (match, ...args) => {
+        const promise = asyncFn(match, ...args);
+        promises.push(promise);
+    });
+    const data = await Promise.all(promises);
+    return str.replace(regex, () => data.shift());
+
+}
 
 
 const client = new Twitter({
@@ -10,7 +33,9 @@ const client = new Twitter({
 });
 
 async function sendMessage(tweet) {
-    axios.post(config.discordWebhook, {"content": tweet.text, "embeds": null, "attachments": []})
+    replaceAsync(tweet.text, /(https:\/\/t.co\/\S+)/mg, expand).then((result) => {
+        axios.post(config.discordWebhook, { "content": result, "embeds": null, "attachments": [] })
+    })
     console.log(tweet)
 }
 
